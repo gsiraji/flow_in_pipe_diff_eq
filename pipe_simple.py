@@ -52,81 +52,118 @@ f.close()
 
 
 # Grid setup
-n = 3
+n = 4
 u0 = 1
 m = 114
 mm = m
 h=1.0/(m+1)
-u=np.zeros((n,m+2,mm+2))   #V_x
-v=np.zeros((n,m+2,mm+2))  #V_y
+uu=np.zeros((m+2,mm+2))
+vv=np.zeros((m+2,mm+2))
+u=np.zeros((n,m*mm))   #V_x
+v=np.zeros((n,m*mm))  #V_y
 speed  = np.zeros((m+2,mm+2)) 
-ww=np.zeros((n,m+2,mm+2))
-psii=np.zeros((n,m+2,mm+2))
-
-
+ww=np.zeros((m+2,mm+2))
+psii=np.zeros((m+2,mm+2))
+w = np.zeros((n,m*mm))
+psi= np.zeros((n,m*mm))
 # Create derivative matrix and source term
 d=np.zeros((mm*m,mm*m))
 f=np.zeros((mm*m))
+tol = np.ones((n,1))
 hfac=1/(h*h)
 
 for k in range(n):
+    if k>0:
+        for j in range(0,m):
+            for i in range(0,m): 
+                
+                ij=i+m*j
+                indices = [i-1+m*j,(j-1)*m+i]
+                neighborz = [psi[k-1][(j-1)*m+i],psi[k-1][j*m+i-1]]
+                if i > m-2:
+                    neighborz.append(psi[k-1][i+m*j])
+                else:
+                    neighborz.append(psi[k-1][i+m*j+1])
+                if j > m-2:
+                    neighborz.append(0)
+                else:
+                    neighborz.append(psi[k-1][i+m*(j+1)])
+                for l in range(2):
+                    if indices[l] < 0:
+                        neighborz[l] = 0
+    #                    print(p[i][j][k])  
+                for l in range(4):
+                    w[k][i+m*j] += neighborz[l]/h**2
+                    #p[i+1][j][k] = (nu)*(p[i][j+1][k]+p[i][(j-1)][k]-4*p[i][(j)][k]+p[i][(j)][k-1]+p[i][(j)][k+1])+p[i][(j)][k]
+                
+                w[k][i+m*j] += 4*psi[k-1][i+m*j]/h**2
+    if k ==0:    
+        # for i in range(m):
+        #     for j in range(m):
+        #         ij=i+m*j
+        #         if i == 0 or i == m-1:
+        #             d[ij,ij]=1
+        #             f[ij] = 0
+        
+        #         # Derivative matrix
+        #         else:    
+        #             d[ij,ij]=-4*hfac
+        #             if i>0: d[ij,ij-1]=hfac
+        #             if i<m-1: d[ij,ij+1]=hfac
+        #             if j>0: d[ij,ij-m]=hfac
+        #             if j<m-1: d[ij,ij+m]=hfac
+        
+        #         # Source term
+        
+        #         f[ij]=0
+                
+        # w[k]=np.linalg.solve(d,f)
+        wsolv = w[k].copy()
+    wsolv = w[k].copy()       
+    for i in range(m):
+        for j in range(m):
+            ij=i+m*j
+            if i == 0 or i == m-1:
+                d[ij,ij]=1
+                wsolv[ij] = 1
+            if j == 0 or j ==m-1:
+                d[ij,ij]=1
+                wsolv[ij] = 0
+            # Derivative matrix
+            else:    
+                d[ij,ij]=-4*hfac
+                if i>0: d[ij,ij-1]=hfac
+                if i<m-1: d[ij,ij+1]=hfac
+                if j>0: d[ij,ij-m]=hfac
+                if j<m-1: d[ij,ij+m]=hfac
     
-for i in range(m):
-    for j in range(m):
-        ij=i+m*j
-        if i == 0 or i == m-1:
-            d[ij,ij]=1
-            f[ij] = 0
-
-        # Derivative matrix
-        else:    
-            d[ij,ij]=-4*hfac
-            if i>0: d[ij,ij-1]=hfac
-            if i<m-1: d[ij,ij+1]=hfac
-            if j>0: d[ij,ij-m]=hfac
-            if j<m-1: d[ij,ij+m]=hfac
-
-        # Source term
-
-        f[ij]=0
-        
-w=np.linalg.solve(d,f)
-wsolv = w.copy()
-       
-for i in range(m):
-    for j in range(m):
-        ij=i+m*j
-        if i == 0 or i == m-1:
-            d[ij,ij]=1
-            wsolv[ij] = j
-        if j == 0 or j ==m-1:
-            d[ij,ij]=1
-        # Derivative matrix
-        else:    
-            d[ij,ij]=-4*hfac
-            if i>0: d[ij,ij-1]=hfac
-            if i<m-1: d[ij,ij+1]=hfac
-            if j>0: d[ij,ij-m]=hfac
-            if j<m-1: d[ij,ij+m]=hfac
-
-        # Source term
-
-        
-psi=np.linalg.solve(d,wsolv)
-
+            # Source term
+    
+            
+    psi[k]=np.linalg.solve(d,wsolv)
+    for i in range(m-2):
+        for j in range(mm-2):
+            ij=i+m*j
+            v[k][ij] = -(psi[k][i+m*j+1] - psi[k][i+m*j-1])/(2*h) #centered difference
+            u[k][ij] = (psi[k][i+m*(j+1)] - psi[k][i+m*(j-1)])/(2*h)
+            tol[k] = np.linalg.norm(np.add(u[k][ij],-u[k-1][ij]))
+    if tol[k] < 1e-3:
+        break
 
 # Reconstruct full grid
 for i in range(m):
-    ww[i+1,1:mm+1]=w[i*m:(i+1)*m]
-    
-for i in range(m):
-    psii[i+1,1:mm+1]=psi[i*m:(i+1)*m]
-    
-for j in range(1,mm):
-    for i in range(1,m):
-        v[j][i] = -(psii[j][i+1] - psii[j][i-1])/(2*h) #centered difference
-        u[j][i] = (psii[j+1][i] - psii[j-1][i])/(2*h)
-        speed[j][i] = np.sqrt(u[j][i]**2 + v[j][i]**2)
+    ww[i+1,1:mm+1]=w[n-1][i*m:(i+1)*m]
+    psii[i+1,1:mm+1]=psi[n-1][i*m:(i+1)*m]
+    uu[i+1,1:mm+1]=u[n-1][i*m:(i+1)*m]
+    vv[i+1,1:mm+1]=v[n-1][i*m:(i+1)*m]
+    for j in range(m):
+        speed[j][i] = np.sqrt(uu[j][i]**2 + vv[j][i]**2)
+
+# for j in range(1,mm):
+#     for i in range(1,m):
+#         # vv[j][i] = -(psii[j][i+1] - psii[j][i-1])/(2*h) #centered difference
+#         # uu[j][i] = (psii[j+1][i] - psii[j-1][i])/(2*h)
+#         speed[j][i] = np.sqrt(u[j][i]**2 + v[j][i]**2)
     
 
 # Plot using Matplotlib
@@ -151,5 +188,5 @@ cp1=plt.contourf(X, Y, speed, 16,cmap=cm.jet)
 cp2=plt.contour(X, Y, psii, 16, colors='black', linewidth=.5)
 plt.colorbar(cp1)
 plt.show()
-cp3 = plt.streamplot(X,Y,v,u, density=0.6, color='k', linewidth=lw)
+cp3 = plt.streamplot(X,Y,vv,uu, density=0.6, color='k', linewidth=lw)
 
